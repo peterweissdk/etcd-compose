@@ -10,22 +10,20 @@ services:
       - "2380:2380"
     volumes:
       - "${DATA_DIR}:/etcd-data"
+    environment:
+      THIS_NAME: "${NAME}" # Change variable to this node's name
+      THIS_IP: "${HOST}" # Change variable to this node's IP
     command:
-      - /usr/local/bin/etcd
-      - --data-dir=/etcd-data
-      - --name
-      - "${NAME_1}"
-      - --initial-advertise-peer-urls
-      - "http://${HOST_1}:2380"
-      - --listen-peer-urls
-      - "http://0.0.0.0:2380"
-      - --advertise-client-urls
-      - "http://${HOST_1}:2379"
-      - --listen-client-urls
-      - "http://0.0.0.0:2379"
-      - --initial-cluster
-      - "${NAME_1}=http://${HOST_1}:2380,${NAME_2}=http://${HOST_2}:2380,${NAME_3}=http://${HOST_3}:2380"
-      - --initial-cluster-state
-      - "${CLUSTER_STATE}"
-      - --initial-cluster-token
-      - "${TOKEN}"
+      - /bin/sh
+      - -c
+      - >
+          /usr/local/bin/etcd
+          --data-dir=/etcd-data
+          --name ${THIS_NAME}
+          --initial-advertise-peer-urls http://${THIS_IP}:2380
+          --listen-peer-urls http://0.0.0.0:2380
+          --advertise-client-urls http://${THIS_IP}:2379
+          --listen-client-urls http://0.0.0.0:2379
+          --initial-cluster ${THIS_NAME}=http://${THIS_IP}:2380,${NAME_2}=http://${HOST_2}:2380,${NAME_3}=http://${HOST_3}:2380
+          --initial-cluster-state ${CLUSTER_STATE}
+          --initial-cluster-token ${TOKEN}

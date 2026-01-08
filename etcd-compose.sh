@@ -13,12 +13,6 @@ EXIT_USER_ABORT=1
 EXIT_CONTAINER_FAILED=2
 EXIT_SETUP_FAILED=3
 
-# Check if docker is available
-if ! command -v docker &> /dev/null; then
-    echo "Error: docker is not installed or not in PATH"
-    exit $EXIT_SETUP_FAILED
-fi
-
 # Function to check container state
 get_container_state() {
     docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "not_found"
@@ -286,6 +280,19 @@ handle_reset() {
 echo "==============================="
 echo "  etcd Docker Compose Manager"
 echo "==============================="
+
+# Check if docker is available
+if ! command -v docker &> /dev/null; then
+    echo "Error: docker is not installed or not in PATH"
+    exit $EXIT_SETUP_FAILED
+fi
+
+# Check if user has permission to run docker
+if ! docker info &> /dev/null; then
+    echo "Error: Cannot connect to Docker daemon."
+    echo "Please run this script with sudo or add your user to the docker group."
+    exit $EXIT_SETUP_FAILED
+fi
 
 # Check container state
 container_state=$(get_container_state)

@@ -113,11 +113,19 @@ run_etcd_setup() {
     declare -a hosts
     
     echo ""
-    echo "Enter node names and hosts:"
-    for ((i=1; i<=num_nodes; i++)); do
-        names[$i]=$(prompt_input "Set NAME_$i")
-        hosts[$i]=$(prompt_input "Set HOST_$i")
-    done
+    echo "Enter the name and host for THIS node (where the container will run):"
+    names[1]=$(prompt_input "Set NAME_1 (this node)")
+    hosts[1]=$(prompt_input "Set HOST_1 (this node)")
+    
+    # Collect remaining nodes if more than 1
+    if [ "$num_nodes" -gt 1 ]; then
+        echo ""
+        echo "Enter names and hosts for the other cluster nodes:"
+        for ((i=2; i<=num_nodes; i++)); do
+            names[$i]=$(prompt_input "Set NAME_$i")
+            hosts[$i]=$(prompt_input "Set HOST_$i")
+        done
+    fi
     
     # Prompt for other settings
     echo ""
@@ -169,35 +177,7 @@ run_etcd_setup() {
     
     echo ""
     echo ".env file created successfully."
-    
-    # List NAME variables and prompt user to choose
-    echo ""
-    echo "Available nodes:"
-    for ((i=1; i<=num_nodes; i++)); do
-        echo "$i) ${names[$i]}"
-    done
-    
-    local node_choice
-    while true; do
-        read -rp "Choose which node to use for this docker-compose instance [1-$num_nodes]: " node_choice
-        if [[ "$node_choice" =~ ^[1-9]$ ]] && [ "$node_choice" -le "$num_nodes" ]; then
-            break
-        else
-            echo "Please enter a number between 1 and $num_nodes."
-        fi
-    done
-    
-    # Update docker-compose.yml with selected node
-    echo ""
-    echo "Updating docker-compose.yml to use NAME_$node_choice and HOST_$node_choice..."
-    
-    # Use sed to update the environment variables in docker-compose.yml
-    sed -i "s/THIS_NAME: \"\${NAME_[0-9]*}\"/THIS_NAME: \"\${NAME_$node_choice}\"/" "$COMPOSE_FILE"
-    sed -i "s/THIS_NAME: \"\${NAME}\"/THIS_NAME: \"\${NAME_$node_choice}\"/" "$COMPOSE_FILE"
-    sed -i "s/THIS_IP: \"\${HOST_[0-9]*}\"/THIS_IP: \"\${HOST_$node_choice}\"/" "$COMPOSE_FILE"
-    sed -i "s/THIS_IP: \"\${HOST}\"/THIS_IP: \"\${HOST_$node_choice}\"/" "$COMPOSE_FILE"
-    
-    echo "docker-compose.yml updated."
+    echo "This node will use NAME_1 (${names[1]}) and HOST_1 (${hosts[1]})."
     
     # Prompt to start container
     echo ""

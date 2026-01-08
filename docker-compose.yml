@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   etcd:
     image: "${REGISTRY}:${ETCD_VERSION}"
@@ -11,8 +9,9 @@ services:
     volumes:
       - "${DATA_DIR}:/etcd-data"
     environment:
-      THIS_NAME: "${NAME}" # Change variable to this node's name
-      THIS_IP: "${HOST}" # Change variable to this node's IP
+      THIS_NAME: "${NAME_1}"
+      THIS_IP: "${HOST_1}"
+      CLUSTER: "${CLUSTER}"
     command:
       - /bin/sh
       - -c
@@ -24,6 +23,6 @@ services:
           --listen-peer-urls http://0.0.0.0:2380
           --advertise-client-urls http://${THIS_IP}:2379
           --listen-client-urls http://0.0.0.0:2379
-          --initial-cluster ${THIS_NAME}=http://${THIS_IP}:2380,${NAME_2}=http://${HOST_2}:2380,${NAME_3}=http://${HOST_3}:2380
+          --initial-cluster ${CLUSTER}
           --initial-cluster-state ${CLUSTER_STATE}
           --initial-cluster-token ${TOKEN}

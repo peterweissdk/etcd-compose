@@ -208,38 +208,53 @@ run_etcd_setup() {
     # Prompt to start container
     echo ""
     if prompt_yes_no "Start etcd container now?"; then
-        echo "Starting etcd container..."
         cd "$SCRIPT_DIR"
-        docker compose up -d
         
-        # Wait a moment for container to start
-        sleep 2
+        local max_attempts=3
+        local attempt=1
+        local state=""
         
-        # Check if container is running
-        local state
-        state=$(get_container_state)
-        
-        if [ "$state" = "running" ]; then
-            echo ""
-            echo "✓ etcd container is running successfully!"
-            show_container_status
+        while [ $attempt -le $max_attempts ]; do
+            echo "Starting etcd container (attempt $attempt of $max_attempts)..."
+            docker compose up -d
             
-            # Update CLUSTER_STATE to existing
-            echo "Updating CLUSTER_STATE to 'existing' in .env file..."
-            sed -i 's/CLUSTER_STATE=new/CLUSTER_STATE=existing/' "$ENV_FILE"
-            echo "CLUSTER_STATE updated."
+            # Wait a moment for container to start
+            sleep 2
             
-            exit $EXIT_SUCCESS
-        else
-            echo ""
-            echo "✗ etcd container failed to start."
-            show_container_status
-            echo ""
-            if prompt_yes_no "Run setup again?"; then
-                run_etcd_setup
+            # Check if container is running
+            state=$(get_container_state)
+            
+            if [ "$state" = "running" ]; then
+                echo ""
+                echo "✓ etcd container is running successfully!"
+                show_container_status
+                
+                # Update CLUSTER_STATE to existing
+                echo "Updating CLUSTER_STATE to 'existing' in .env file..."
+                sed -i 's/CLUSTER_STATE=new/CLUSTER_STATE=existing/' "$ENV_FILE"
+                echo "CLUSTER_STATE updated."
+                
+                exit $EXIT_SUCCESS
             else
-                exit $EXIT_CONTAINER_FAILED
+                echo "Attempt $attempt failed."
+                if [ $attempt -lt $max_attempts ]; then
+                    echo "Retrying..."
+                    sleep 2
+                fi
             fi
+            
+            ((attempt++))
+        done
+        
+        # All attempts failed
+        echo ""
+        echo "✗ etcd container failed to start after $max_attempts attempts."
+        show_container_status
+        echo ""
+        if prompt_yes_no "Run setup again?"; then
+            run_etcd_setup
+        else
+            exit $EXIT_CONTAINER_FAILED
         fi
     else
         echo "Container not started."

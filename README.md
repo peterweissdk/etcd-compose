@@ -51,9 +51,10 @@ All configuration is stored in the `.env` file:
 
 ```
 etcd-compose/
-├── docker-compose.yml   # Docker Compose service definition
 ├── .env                 # Environment variables (generated)
+├── docker-compose.yml   # Docker Compose service definition
 ├── etcd-compose.sh      # Interactive setup script
+├── LICENSE              # GPL v3.0 license
 └── README.md            # This file
 ```
 

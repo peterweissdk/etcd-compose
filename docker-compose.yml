@@ -1,7 +1,8 @@
 services:
   etcd:
     image: "${REGISTRY}:${ETCD_VERSION}"
-    container_name: etcd:${ETCD_VERSION}
+    # Hardcoded container name
+    container_name: etcd
     restart: unless-stopped
     ports:
       - "2379:2379"

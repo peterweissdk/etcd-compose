@@ -15,7 +15,13 @@ EXIT_SETUP_FAILED=3
 
 # Function to check container state
 get_container_state() {
-    docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "not_found"
+    local state
+    state=$(docker inspect --format='{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null) || true
+    if [ -n "$state" ]; then
+        echo "$state"
+    else
+        echo "not_found"
+    fi
 }
 
 # Function to show container status

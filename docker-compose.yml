@@ -12,6 +12,8 @@ services:
       THIS_NAME: "${NAME_1}"
       THIS_IP: "${HOST_1}"
       CLUSTER: "${CLUSTER}"
+      CLUSTER_STATE: "${CLUSTER_STATE}"
+      TOKEN: "${TOKEN}"
     command:
       - /bin/sh
       - -c

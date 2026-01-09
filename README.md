@@ -1,3 +1,5 @@
+# Planned Feature: TLS-secured inter-node communication
+
 # 💾 etcd Docker Compose
 
 [![Static Badge](https://img.shields.io/badge/Docker-Compose-white?style=flat&logo=docker&logoColor=white&logoSize=auto&labelColor=black)](https://docker.com/)

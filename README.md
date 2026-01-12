@@ -1,4 +1,4 @@
-# Planned Feature: TLS-secured inter-node communication, and etcd backup functionality.
+### Planned Feature: TLS-secured inter-node communication, and etcd backup functionality.
 
 # 💾 etcd Docker Compose
 

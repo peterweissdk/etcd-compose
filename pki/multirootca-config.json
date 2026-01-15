@@ -1,0 +1,7 @@
+{
+  "etcd-intermediate-ca": {
+    "private": "file:///pki/intermediate-ca-key.pem",
+    "certificate": "file:///pki/intermediate-ca.pem",
+    "config": "file:///pki/ca-config.json"
+  }
+}

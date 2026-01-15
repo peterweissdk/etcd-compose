@@ -1,0 +1,10 @@
+services:
+  # CFSSL client container - Run on all nodes for certificate requests
+  cfssl:
+    image: cfssl/cfssl:latest
+    container_name: cfssl
+    volumes:
+      - "${PKI_DIR}:/pki"
+      - "${CERT_DIR}:/certs"
+    entrypoint: ["tail", "-f", "/dev/null"]
+    # Container stays running for on-demand certificate operations

@@ -1,0 +1,33 @@
+services:
+  etcd:
+    image: "${REGISTRY}:${ETCD_VERSION}"
+    container_name: etcd
+    restart: unless-stopped
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    volumes:
+      - "${DATA_DIR}:/etcd-data"
+      - "${CERT_DIR}:/etc/etcd/pki:ro"
+    command:
+      - /usr/local/bin/etcd
+      - --data-dir=/etcd-data
+      - --name=${NAME_1}
+      # Client TLS
+      - --listen-client-urls=https://0.0.0.0:2379
+      - --advertise-client-urls=https://${HOST_1}:2379
+      - --cert-file=/etc/etcd/pki/server.pem
+      - --key-file=/etc/etcd/pki/server-key.pem
+      - --trusted-ca-file=/etc/etcd/pki/ca-chain.pem
+      - --client-cert-auth=true
+      # Peer TLS
+      - --listen-peer-urls=https://0.0.0.0:2380
+      - --initial-advertise-peer-urls=https://${HOST_1}:2380
+      - --peer-cert-file=/etc/etcd/pki/peer.pem
+      - --peer-key-file=/etc/etcd/pki/peer-key.pem
+      - --peer-trusted-ca-file=/etc/etcd/pki/ca-chain.pem
+      - --peer-client-cert-auth=true
+      # Cluster
+      - --initial-cluster=${CLUSTER}
+      - --initial-cluster-state=${CLUSTER_STATE}
+      - --initial-cluster-token=${TOKEN}

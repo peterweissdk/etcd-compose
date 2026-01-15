@@ -1,0 +1,25 @@
+services:
+  # CA Server - Run only on Node 1
+  multirootca:
+    image: cfssl/cfssl:latest
+    container_name: multirootca
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      - "${PKI_DIR}:/pki"
+    command:
+      - multirootca
+      - -a
+      - "0.0.0.0:8888"
+      - -roots
+      - /pki/multirootca-config.json
+      - -tls-cert
+      - /pki/ca-server.pem
+      - -tls-key
+      - /pki/ca-server-key.pem
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "https://localhost:8888/api/v1/cfssl/info", "--no-check-certificate"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

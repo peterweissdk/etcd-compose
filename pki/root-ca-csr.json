@@ -1,0 +1,16 @@
+{
+  "CN": "etcd-root-ca",
+  "key": {
+    "algo": "rsa",
+    "size": 4096
+  },
+  "names": [
+    {
+      "O": "etcd",
+      "OU": "etcd Root CA"
+    }
+  ],
+  "ca": {
+    "expiry": "87600h"
+  }
+}

@@ -7,10 +7,29 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKI_DIR="${SCRIPT_DIR}/../pki"
 CERT_DIR="${PKI_DIR}/certs"
+BIN_DIR="${SCRIPT_DIR}/../bin"
 
 # Exit codes
 EXIT_SUCCESS=0
 EXIT_FAILED=1
+
+# Check if cfssl is installed, if not download it
+check_cfssl() {
+    if [ ! -x "${BIN_DIR}/cfssl" ] || [ ! -x "${BIN_DIR}/cfssljson" ]; then
+        echo "cfssl tools not found. Installing..."
+        "${SCRIPT_DIR}/install-cfssl.sh" "$BIN_DIR"
+    fi
+}
+
+# cfssl command wrapper
+cfssl() {
+    "${BIN_DIR}/cfssl" "$@"
+}
+
+# cfssljson command wrapper
+cfssljson() {
+    "${BIN_DIR}/cfssljson" "$@"
+}
 
 # Arguments
 CLIENT_NAME="${1:-etcd-client}"
@@ -22,18 +41,8 @@ mkdir -p "$CLIENT_CERT_DIR"
 echo "=== Generating Client Certificate: ${CLIENT_NAME} ==="
 echo ""
 
-# Check if cfssl container is available
-if ! docker ps --format '{{.Names}}' | grep -q '^cfssl$'; then
-    echo "Starting cfssl container..."
-    cd "${SCRIPT_DIR}/.."
-    PKI_DIR="$PKI_DIR" CERT_DIR="$CERT_DIR" docker compose -f docker-compose.cfssl.yml up -d
-    sleep 2
-fi
-
-# Function to run cfssl commands in container
-cfssl_exec() {
-    docker exec cfssl "$@"
-}
+# Ensure cfssl is available
+check_cfssl
 
 # Check if multirootca is running
 use_remote=false
@@ -64,23 +73,23 @@ EOF
 # Generate client certificate
 echo "Generating client certificate..."
 if [ "$use_remote" = true ]; then
-    cfssl_exec cfssl genkey "/pki/client-${CLIENT_NAME}-csr.json" | \
-        docker exec -i cfssl cfssljson -bare "/certs/clients/${CLIENT_NAME}"
+    cfssl genkey "${PKI_DIR}/client-${CLIENT_NAME}-csr.json" | \
+        cfssljson -bare "${CLIENT_CERT_DIR}/${CLIENT_NAME}"
     
-    cfssl_exec cfssl sign \
+    cfssl sign \
         -remote "${CA_SERVER}" \
         -label "etcd-intermediate-ca" \
         -profile "client" \
-        "/certs/clients/${CLIENT_NAME}.csr" | \
-        docker exec -i cfssl cfssljson -bare "/certs/clients/${CLIENT_NAME}"
+        "${CLIENT_CERT_DIR}/${CLIENT_NAME}.csr" | \
+        cfssljson -bare "${CLIENT_CERT_DIR}/${CLIENT_NAME}"
 else
-    cfssl_exec cfssl gencert \
-        -ca /pki/intermediate-ca.pem \
-        -ca-key /pki/intermediate-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl gencert \
+        -ca "${PKI_DIR}/intermediate-ca.pem" \
+        -ca-key "${PKI_DIR}/intermediate-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -profile client \
-        "/pki/client-${CLIENT_NAME}-csr.json" | \
-        docker exec -i cfssl cfssljson -bare "/certs/clients/${CLIENT_NAME}"
+        "${PKI_DIR}/client-${CLIENT_NAME}-csr.json" | \
+        cfssljson -bare "${CLIENT_CERT_DIR}/${CLIENT_NAME}"
 fi
 
 # Copy CA chain

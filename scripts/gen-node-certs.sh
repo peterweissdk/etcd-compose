@@ -7,10 +7,29 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKI_DIR="${SCRIPT_DIR}/../pki"
 CERT_DIR="${PKI_DIR}/certs"
+BIN_DIR="${SCRIPT_DIR}/../bin"
 
 # Exit codes
 EXIT_SUCCESS=0
 EXIT_FAILED=1
+
+# Check if cfssl is installed, if not download it
+check_cfssl() {
+    if [ ! -x "${BIN_DIR}/cfssl" ] || [ ! -x "${BIN_DIR}/cfssljson" ]; then
+        echo "cfssl tools not found. Installing..."
+        "${SCRIPT_DIR}/install-cfssl.sh" "$BIN_DIR"
+    fi
+}
+
+# cfssl command wrapper
+cfssl() {
+    "${BIN_DIR}/cfssl" "$@"
+}
+
+# cfssljson command wrapper
+cfssljson() {
+    "${BIN_DIR}/cfssljson" "$@"
+}
 
 # Arguments
 NODE_NAME="${1:-}"
@@ -33,18 +52,8 @@ mkdir -p "$NODE_CERT_DIR"
 echo "=== Generating Certificates for ${NODE_NAME} ==="
 echo ""
 
-# Check if cfssl container is available
-if ! docker ps --format '{{.Names}}' | grep -q '^cfssl$'; then
-    echo "Starting cfssl container..."
-    cd "${SCRIPT_DIR}/.."
-    PKI_DIR="$PKI_DIR" CERT_DIR="$CERT_DIR" docker compose -f docker-compose.cfssl.yml up -d
-    sleep 2
-fi
-
-# Function to run cfssl commands in container
-cfssl_exec() {
-    docker exec cfssl "$@"
-}
+# Ensure cfssl is available
+check_cfssl
 
 # Check if multirootca is running (for remote signing)
 use_remote=false
@@ -60,26 +69,26 @@ echo ""
 echo "Generating server certificate..."
 if [ "$use_remote" = true ]; then
     # Generate key and CSR locally, sign remotely
-    cfssl_exec cfssl genkey /pki/server-csr.json | \
-        docker exec -i cfssl cfssljson -bare "/certs/${NODE_NAME}/server"
+    cfssl genkey "${PKI_DIR}/server-csr.json" | \
+        cfssljson -bare "${NODE_CERT_DIR}/server"
     
-    cfssl_exec cfssl sign \
+    cfssl sign \
         -remote "${CA_SERVER}" \
         -label "etcd-intermediate-ca" \
         -profile "server" \
         -hostname "localhost,127.0.0.1,${NODE_NAME},${NODE_IP}" \
-        "/certs/${NODE_NAME}/server.csr" | \
-        docker exec -i cfssl cfssljson -bare "/certs/${NODE_NAME}/server"
+        "${NODE_CERT_DIR}/server.csr" | \
+        cfssljson -bare "${NODE_CERT_DIR}/server"
 else
     # Sign locally with intermediate CA
-    cfssl_exec cfssl gencert \
-        -ca /pki/intermediate-ca.pem \
-        -ca-key /pki/intermediate-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl gencert \
+        -ca "${PKI_DIR}/intermediate-ca.pem" \
+        -ca-key "${PKI_DIR}/intermediate-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -hostname "localhost,127.0.0.1,${NODE_NAME},${NODE_IP}" \
         -profile server \
-        /pki/server-csr.json | \
-        docker exec -i cfssl cfssljson -bare "/certs/${NODE_NAME}/server"
+        "${PKI_DIR}/server-csr.json" | \
+        cfssljson -bare "${NODE_CERT_DIR}/server"
 fi
 echo "Server certificate generated: ${NODE_CERT_DIR}/server.pem"
 
@@ -87,25 +96,25 @@ echo "Server certificate generated: ${NODE_CERT_DIR}/server.pem"
 echo ""
 echo "Generating peer certificate..."
 if [ "$use_remote" = true ]; then
-    cfssl_exec cfssl genkey /pki/peer-csr.json | \
-        docker exec -i cfssl cfssljson -bare "/certs/${NODE_NAME}/peer"
+    cfssl genkey "${PKI_DIR}/peer-csr.json" | \
+        cfssljson -bare "${NODE_CERT_DIR}/peer"
     
-    cfssl_exec cfssl sign \
+    cfssl sign \
         -remote "${CA_SERVER}" \
         -label "etcd-intermediate-ca" \
         -profile "peer" \
         -hostname "${NODE_NAME},${NODE_IP}" \
-        "/certs/${NODE_NAME}/peer.csr" | \
-        docker exec -i cfssl cfssljson -bare "/certs/${NODE_NAME}/peer"
+        "${NODE_CERT_DIR}/peer.csr" | \
+        cfssljson -bare "${NODE_CERT_DIR}/peer"
 else
-    cfssl_exec cfssl gencert \
-        -ca /pki/intermediate-ca.pem \
-        -ca-key /pki/intermediate-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl gencert \
+        -ca "${PKI_DIR}/intermediate-ca.pem" \
+        -ca-key "${PKI_DIR}/intermediate-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -hostname "${NODE_NAME},${NODE_IP}" \
         -profile peer \
-        /pki/peer-csr.json | \
-        docker exec -i cfssl cfssljson -bare "/certs/${NODE_NAME}/peer"
+        "${PKI_DIR}/peer-csr.json" | \
+        cfssljson -bare "${NODE_CERT_DIR}/peer"
 fi
 echo "Peer certificate generated: ${NODE_CERT_DIR}/peer.pem"
 

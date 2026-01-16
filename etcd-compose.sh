@@ -7,10 +7,28 @@ ENV_FILE="${SCRIPT_DIR}/.env"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 COMPOSE_TLS_FILE="${SCRIPT_DIR}/docker-compose.tls.yml"
 COMPOSE_CA_FILE="${SCRIPT_DIR}/docker-compose.ca.yml"
-COMPOSE_CFSSL_FILE="${SCRIPT_DIR}/docker-compose.cfssl.yml"
 CONTAINER_NAME="etcd"
 PKI_DIR="${SCRIPT_DIR}/pki"
 CERT_DIR="${PKI_DIR}/certs"
+BIN_DIR="${SCRIPT_DIR}/bin"
+
+# Check if cfssl is installed, if not download it
+check_cfssl() {
+    if [ ! -x "${BIN_DIR}/cfssl" ] || [ ! -x "${BIN_DIR}/cfssljson" ]; then
+        echo "cfssl tools not found. Installing..."
+        "${SCRIPT_DIR}/scripts/install-cfssl.sh" "$BIN_DIR"
+    fi
+}
+
+# cfssl command wrapper
+cfssl_cmd() {
+    "${BIN_DIR}/cfssl" "$@"
+}
+
+# cfssljson command wrapper
+cfssljson_cmd() {
+    "${BIN_DIR}/cfssljson" "$@"
+}
 
 # Exit codes
 EXIT_SUCCESS=0
@@ -366,32 +384,29 @@ run_etcd_tls_setup() {
     echo "=== Initializing PKI Infrastructure ==="
     echo ""
     
-    # Start cfssl container
-    echo "Starting cfssl container..."
-    cd "$SCRIPT_DIR"
-    PKI_DIR="$PKI_DIR" CERT_DIR="$CERT_DIR" docker compose -f "$COMPOSE_CFSSL_FILE" up -d
-    sleep 2
+    # Ensure cfssl is available
+    check_cfssl
     
     # Generate Root CA
     echo ""
     echo "Generating Root CA certificate (valid for 10 years)..."
-    docker exec cfssl cfssl gencert -initca /pki/root-ca-csr.json 2>/dev/null | \
-        docker exec -i cfssl cfssljson -bare /pki/root-ca
+    cfssl_cmd gencert -initca "${PKI_DIR}/root-ca-csr.json" | \
+        cfssljson_cmd -bare "${PKI_DIR}/root-ca"
     echo "Root CA generated."
     
     # Generate Intermediate CA
     echo ""
     echo "Generating Intermediate CA certificate (valid for 8 years)..."
-    docker exec cfssl cfssl gencert -initca /pki/intermediate-ca-csr.json 2>/dev/null | \
-        docker exec -i cfssl cfssljson -bare /pki/intermediate-ca-csr
+    cfssl_cmd gencert -initca "${PKI_DIR}/intermediate-ca-csr.json" | \
+        cfssljson_cmd -bare "${PKI_DIR}/intermediate-ca-csr"
     
-    docker exec cfssl cfssl sign \
-        -ca /pki/root-ca.pem \
-        -ca-key /pki/root-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl_cmd sign \
+        -ca "${PKI_DIR}/root-ca.pem" \
+        -ca-key "${PKI_DIR}/root-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -profile intermediate \
-        /pki/intermediate-ca-csr.csr 2>/dev/null | \
-        docker exec -i cfssl cfssljson -bare /pki/intermediate-ca
+        "${PKI_DIR}/intermediate-ca-csr.csr" | \
+        cfssljson_cmd -bare "${PKI_DIR}/intermediate-ca"
     echo "Intermediate CA generated."
     
     # Create CA chain
@@ -403,14 +418,14 @@ run_etcd_tls_setup() {
     # Generate CA server certificate for multirootca
     echo ""
     echo "Generating CA server certificate..."
-    docker exec cfssl cfssl gencert \
-        -ca /pki/intermediate-ca.pem \
-        -ca-key /pki/intermediate-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl_cmd gencert \
+        -ca "${PKI_DIR}/intermediate-ca.pem" \
+        -ca-key "${PKI_DIR}/intermediate-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -hostname "localhost,127.0.0.1,${hosts[1]}" \
         -profile server \
-        /pki/server-csr.json 2>/dev/null | \
-        docker exec -i cfssl cfssljson -bare /pki/ca-server
+        "${PKI_DIR}/server-csr.json" | \
+        cfssljson_cmd -bare "${PKI_DIR}/ca-server"
     echo "CA server certificate generated."
     
     # Generate certificates for this node (Node 1)
@@ -419,24 +434,24 @@ run_etcd_tls_setup() {
     mkdir -p "${CERT_DIR}/${names[1]}"
     
     # Server cert
-    docker exec cfssl cfssl gencert \
-        -ca /pki/intermediate-ca.pem \
-        -ca-key /pki/intermediate-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl_cmd gencert \
+        -ca "${PKI_DIR}/intermediate-ca.pem" \
+        -ca-key "${PKI_DIR}/intermediate-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -hostname "localhost,127.0.0.1,${names[1]},${hosts[1]}" \
         -profile server \
-        /pki/server-csr.json 2>/dev/null | \
-        docker exec -i cfssl cfssljson -bare "/certs/${names[1]}/server"
+        "${PKI_DIR}/server-csr.json" | \
+        cfssljson_cmd -bare "${CERT_DIR}/${names[1]}/server"
     
     # Peer cert
-    docker exec cfssl cfssl gencert \
-        -ca /pki/intermediate-ca.pem \
-        -ca-key /pki/intermediate-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl_cmd gencert \
+        -ca "${PKI_DIR}/intermediate-ca.pem" \
+        -ca-key "${PKI_DIR}/intermediate-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -hostname "${names[1]},${hosts[1]}" \
         -profile peer \
-        /pki/peer-csr.json 2>/dev/null | \
-        docker exec -i cfssl cfssljson -bare "/certs/${names[1]}/peer"
+        "${PKI_DIR}/peer-csr.json" | \
+        cfssljson_cmd -bare "${CERT_DIR}/${names[1]}/peer"
     
     # Copy CA chain
     cp "${PKI_DIR}/ca-chain.pem" "${CERT_DIR}/${names[1]}/"

@@ -87,10 +87,12 @@ etcd-compose/
 ├── docker-compose.yml       # Docker Compose service definition (no TLS)
 ├── docker-compose.tls.yml   # Docker Compose with TLS enabled
 ├── docker-compose.ca.yml    # Multirootca CA server
-├── docker-compose.cfssl.yml # CFSSL client container
 ├── etcd-compose.sh          # Interactive setup script
 ├── LICENSE                  # GPL v3.0 license
 ├── README.md                # This file
+├── bin/                     # cfssl binaries (auto-downloaded)
+│   ├── cfssl                # Certificate generation tool
+│   └── cfssljson            # JSON output processor
 ├── pki/                     # PKI configuration and certificates
 │   ├── ca-config.json       # CFSSL signing profiles
 │   ├── root-ca-csr.json     # Root CA CSR template
@@ -101,6 +103,7 @@ etcd-compose/
 │   ├── multirootca-config.json   # Multirootca configuration
 │   └── certs/               # Generated certificates
 └── scripts/                 # Helper scripts
+    ├── install-cfssl.sh     # Download cfssl binaries
     ├── init-ca.sh           # Initialize CA infrastructure
     ├── gen-node-certs.sh    # Generate node certificates
     ├── gen-client-cert.sh   # Generate client certificates

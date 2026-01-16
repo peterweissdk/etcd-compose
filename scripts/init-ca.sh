@@ -7,10 +7,29 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKI_DIR="${SCRIPT_DIR}/../pki"
 CERT_DIR="${PKI_DIR}/certs"
+BIN_DIR="${SCRIPT_DIR}/../bin"
 
 # Exit codes
 EXIT_SUCCESS=0
 EXIT_FAILED=1
+
+# Check if cfssl is installed, if not download it
+check_cfssl() {
+    if [ ! -x "${BIN_DIR}/cfssl" ] || [ ! -x "${BIN_DIR}/cfssljson" ]; then
+        echo "cfssl tools not found. Installing..."
+        "${SCRIPT_DIR}/install-cfssl.sh" "$BIN_DIR"
+    fi
+}
+
+# cfssl command wrapper
+cfssl() {
+    "${BIN_DIR}/cfssl" "$@"
+}
+
+# cfssljson command wrapper
+cfssljson() {
+    "${BIN_DIR}/cfssljson" "$@"
+}
 
 echo "=== Initializing PKI Infrastructure ==="
 echo ""
@@ -18,26 +37,16 @@ echo ""
 # Create directories
 mkdir -p "$CERT_DIR"
 
-# Check if cfssl container is available
-if ! docker ps --format '{{.Names}}' | grep -q '^cfssl$'; then
-    echo "Starting cfssl container..."
-    cd "${SCRIPT_DIR}/.."
-    PKI_DIR="$PKI_DIR" CERT_DIR="$CERT_DIR" docker compose -f docker-compose.cfssl.yml up -d
-    sleep 2
-fi
-
-# Function to run cfssl commands in container
-cfssl_exec() {
-    docker exec cfssl "$@"
-}
+# Ensure cfssl is available
+check_cfssl
 
 # Generate Root CA (valid for 10 years = 87600h)
 echo "Generating Root CA certificate (valid for 10 years)..."
 if [ -f "${PKI_DIR}/root-ca.pem" ]; then
     echo "Root CA already exists. Skipping..."
 else
-    cfssl_exec cfssl gencert -initca /pki/root-ca-csr.json | \
-        docker exec -i cfssl cfssljson -bare /pki/root-ca
+    cfssl gencert -initca "${PKI_DIR}/root-ca-csr.json" | \
+        cfssljson -bare "${PKI_DIR}/root-ca"
     echo "Root CA generated: root-ca.pem, root-ca-key.pem"
 fi
 
@@ -48,17 +57,17 @@ if [ -f "${PKI_DIR}/intermediate-ca.pem" ]; then
     echo "Intermediate CA already exists. Skipping..."
 else
     # Generate intermediate CA CSR
-    cfssl_exec cfssl gencert -initca /pki/intermediate-ca-csr.json | \
-        docker exec -i cfssl cfssljson -bare /pki/intermediate-ca-csr
+    cfssl gencert -initca "${PKI_DIR}/intermediate-ca-csr.json" | \
+        cfssljson -bare "${PKI_DIR}/intermediate-ca-csr"
     
     # Sign intermediate CA with root CA
-    cfssl_exec cfssl sign \
-        -ca /pki/root-ca.pem \
-        -ca-key /pki/root-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl sign \
+        -ca "${PKI_DIR}/root-ca.pem" \
+        -ca-key "${PKI_DIR}/root-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -profile intermediate \
-        /pki/intermediate-ca-csr.csr | \
-        docker exec -i cfssl cfssljson -bare /pki/intermediate-ca
+        "${PKI_DIR}/intermediate-ca-csr.csr" | \
+        cfssljson -bare "${PKI_DIR}/intermediate-ca"
     
     echo "Intermediate CA generated: intermediate-ca.pem, intermediate-ca-key.pem"
 fi
@@ -80,14 +89,14 @@ else
         read -rp "Enter CA server hostname/IP: " CA_HOST
     fi
     
-    cfssl_exec cfssl gencert \
-        -ca /pki/intermediate-ca.pem \
-        -ca-key /pki/intermediate-ca-key.pem \
-        -config /pki/ca-config.json \
+    cfssl gencert \
+        -ca "${PKI_DIR}/intermediate-ca.pem" \
+        -ca-key "${PKI_DIR}/intermediate-ca-key.pem" \
+        -config "${PKI_DIR}/ca-config.json" \
         -hostname="localhost,127.0.0.1,${CA_HOST}" \
         -profile=server \
-        /pki/server-csr.json | \
-        docker exec -i cfssl cfssljson -bare /pki/ca-server
+        "${PKI_DIR}/server-csr.json" | \
+        cfssljson -bare "${PKI_DIR}/ca-server"
     
     echo "CA server certificate generated: ca-server.pem, ca-server-key.pem"
 fi

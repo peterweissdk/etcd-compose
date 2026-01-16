@@ -16,7 +16,7 @@ services:
       - -ca-key=/pki/intermediate-ca-key.pem
       - -config=/pki/ca-config.json
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8888/api/v1/cfssl/info"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8888/api/v1/cfssl/health"]
       interval: 30s
       timeout: 10s
       retries: 3

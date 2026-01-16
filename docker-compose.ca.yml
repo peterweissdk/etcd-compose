@@ -9,17 +9,14 @@ services:
     volumes:
       - "${PKI_DIR}:/pki"
     command:
-      - multirootca
-      - -a
-      - "0.0.0.0:8888"
-      - -roots
-      - /pki/multirootca-config.json
-      - -tls-cert
-      - /pki/ca-server.pem
-      - -tls-key
-      - /pki/ca-server-key.pem
+      - serve
+      - -address=0.0.0.0
+      - -port=8888
+      - -ca=/pki/intermediate-ca.pem
+      - -ca-key=/pki/intermediate-ca-key.pem
+      - -config=/pki/ca-config.json
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "https://localhost:8888/api/v1/cfssl/info", "--no-check-certificate"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8888/api/v1/cfssl/info"]
       interval: 30s
       timeout: 10s
       retries: 3

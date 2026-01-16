@@ -574,6 +574,9 @@ run_etcd_tls_setup() {
             -profile intermediate \
             "${PKI_DIR}/intermediate-ca-csr.csr" | \
             cfssljson_cmd -bare "${PKI_DIR}/intermediate-ca"
+        
+        # Copy the key from the CSR step (cfssl sign doesn't output a key)
+        cp "${PKI_DIR}/intermediate-ca-csr-key.pem" "${PKI_DIR}/intermediate-ca-key.pem"
         echo "Intermediate CA generated."
         
         # Create CA chain

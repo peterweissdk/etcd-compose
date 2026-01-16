@@ -87,6 +87,107 @@ prompt_yes_no() {
     done
 }
 
+# Function to setup SSH key and copy to remote host
+setup_ssh_to_node1() {
+    local node1_ip="$1"
+    local ssh_user="${2:-$(whoami)}"
+    
+    echo ""
+    echo "=== Setting up SSH connection to Node 1 ==="
+    echo ""
+    
+    # Check if SSH key exists, if not generate one
+    if [ ! -f "$HOME/.ssh/id_rsa" ] && [ ! -f "$HOME/.ssh/id_ed25519" ]; then
+        echo "No SSH key found. Generating new SSH key..."
+        ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519" -N "" -q
+        echo "SSH key generated: $HOME/.ssh/id_ed25519"
+    else
+        echo "SSH key already exists."
+    fi
+    
+    # Test SSH connection first
+    echo ""
+    echo "Testing SSH connection to ${ssh_user}@${node1_ip}..."
+    if ssh -o BatchMode=yes -o ConnectTimeout=5 "${ssh_user}@${node1_ip}" "echo 'SSH connection successful'" 2>/dev/null; then
+        echo "✓ SSH connection already configured."
+        return 0
+    fi
+    
+    # SSH key not copied yet, use ssh-copy-id
+    echo ""
+    echo "SSH key not yet authorized on Node 1."
+    echo "Running ssh-copy-id to copy your public key to Node 1..."
+    echo "You will be prompted for the password for ${ssh_user}@${node1_ip}"
+    echo ""
+    
+    if ssh-copy-id "${ssh_user}@${node1_ip}"; then
+        echo ""
+        echo "✓ SSH key copied successfully."
+        return 0
+    else
+        echo ""
+        echo "✗ Failed to copy SSH key to Node 1."
+        return 1
+    fi
+}
+
+# Function to download PKI files from Node 1 via SSH
+download_pki_from_node1() {
+    local node1_ip="$1"
+    local ssh_user="${2:-$(whoami)}"
+    local remote_pki_dir="${3:-/home/${ssh_user}/Git/docker-compose/etcd-compose/pki}"
+    
+    echo ""
+    echo "=== Downloading PKI files from Node 1 ==="
+    echo ""
+    
+    # Create local PKI directory
+    mkdir -p "${PKI_DIR}"
+    
+    # Files to download
+    local files_to_copy=(
+        "ca-config.json"
+        "ca-chain.pem"
+        "intermediate-ca.pem"
+        "intermediate-ca-key.pem"
+        "server-csr.json"
+        "peer-csr.json"
+        "client-csr.json"
+        "multirootca-config.json"
+    )
+    
+    echo "Downloading PKI files from ${ssh_user}@${node1_ip}:${remote_pki_dir}..."
+    
+    local failed=false
+    for file in "${files_to_copy[@]}"; do
+        echo "  Copying ${file}..."
+        if scp -q "${ssh_user}@${node1_ip}:${remote_pki_dir}/${file}" "${PKI_DIR}/" 2>/dev/null; then
+            echo "    ✓ ${file}"
+        else
+            echo "    ✗ ${file} (not found or failed)"
+            # ca-chain.pem and intermediate CA files are critical
+            if [[ "$file" == "ca-chain.pem" ]] || [[ "$file" == "intermediate-ca.pem" ]] || [[ "$file" == "intermediate-ca-key.pem" ]]; then
+                failed=true
+            fi
+        fi
+    done
+    
+    if [ "$failed" = true ]; then
+        echo ""
+        echo "✗ Failed to download critical PKI files from Node 1."
+        return 1
+    fi
+    
+    # Set permissions
+    chmod 644 "${PKI_DIR}"/*.pem 2>/dev/null || true
+    chmod 600 "${PKI_DIR}"/*-key.pem 2>/dev/null || true
+    chmod 644 "${PKI_DIR}"/*.json 2>/dev/null || true
+    
+    echo ""
+    echo "✓ PKI files downloaded successfully."
+    return 0
+}
+
 # Function to prompt for input with optional default
 prompt_input() {
     local prompt="$1"
@@ -422,6 +523,38 @@ run_etcd_tls_setup() {
         echo "=== Initializing PKI Infrastructure (Node 1 - CA Server) ==="
         echo ""
         
+        # Install and enable SSH server so other nodes can connect
+        echo "Ensuring SSH server is installed and running..."
+        if ! systemctl is-active --quiet sshd 2>/dev/null && ! systemctl is-active --quiet ssh 2>/dev/null; then
+            echo "SSH server not running. Installing and enabling..."
+            if command -v apt-get &>/dev/null; then
+                sudo apt-get update -qq && sudo apt-get install -y -qq openssh-server
+                sudo systemctl enable --now ssh
+            elif command -v dnf &>/dev/null; then
+                sudo dnf install -y -q openssh-server
+                sudo systemctl enable --now sshd
+            elif command -v yum &>/dev/null; then
+                sudo yum install -y -q openssh-server
+                sudo systemctl enable --now sshd
+            elif command -v pacman &>/dev/null; then
+                sudo pacman -S --noconfirm --quiet openssh
+                sudo systemctl enable --now sshd
+            elif command -v zypper &>/dev/null; then
+                sudo zypper install -y -q openssh
+                sudo systemctl enable --now sshd
+            else
+                echo "WARNING: Could not detect package manager. Please install SSH server manually."
+            fi
+        fi
+        
+        # Verify SSH is running
+        if systemctl is-active --quiet sshd 2>/dev/null || systemctl is-active --quiet ssh 2>/dev/null; then
+            echo "✓ SSH server is running."
+        else
+            echo "WARNING: SSH server may not be running. Other nodes may not be able to connect."
+        fi
+        echo ""
+        
         # Generate Root CA
         echo "Generating Root CA certificate (valid for 10 years)..."
         cfssl_cmd gencert -initca "${PKI_DIR}/root-ca-csr.json" | \
@@ -523,23 +656,45 @@ run_etcd_tls_setup() {
         fi
     else
         # === OTHER NODES: Request certificates from CA server ===
-        echo "=== Requesting Certificates from CA Server (Node $this_node) ==="
+        echo "=== Setting up Node $this_node ==="
         echo ""
         
         local node_name="${names[$this_node]}"
         local node_ip="${hosts[$this_node]}"
+        local node1_ip="${hosts[1]}"
         
-        # Check if CA chain exists (must be copied from Node 1)
+        # Check if CA chain exists, if not download from Node 1 via SSH
         if [ ! -f "${PKI_DIR}/ca-chain.pem" ]; then
-            echo "ERROR: CA chain not found at ${PKI_DIR}/ca-chain.pem"
+            echo "PKI files not found locally. Will download from Node 1 via SSH."
             echo ""
-            echo "You must copy the following files from Node 1:"
-            echo "  - pki/ca-chain.pem"
-            echo "  - pki/intermediate-ca.pem (for local signing)"
-            echo "  - pki/intermediate-ca-key.pem (for local signing)"
-            echo ""
-            echo "Or ensure the multirootca server is running on Node 1."
-            exit $EXIT_SETUP_FAILED
+            
+            # Get SSH user for Node 1
+            local ssh_user
+            ssh_user=$(prompt_input "SSH username for Node 1 (${node1_ip})" "$(whoami)")
+            
+            # Get remote PKI directory path
+            local remote_pki_dir
+            remote_pki_dir=$(prompt_input "PKI directory path on Node 1" "/home/${ssh_user}/Git/docker-compose/etcd-compose/pki")
+            
+            # Setup SSH connection
+            if ! setup_ssh_to_node1 "$node1_ip" "$ssh_user"; then
+                echo ""
+                echo "Failed to setup SSH connection to Node 1."
+                echo "Please ensure:"
+                echo "  1. SSH server is running on Node 1"
+                echo "  2. You have valid credentials for ${ssh_user}@${node1_ip}"
+                exit $EXIT_SETUP_FAILED
+            fi
+            
+            # Download PKI files
+            if ! download_pki_from_node1 "$node1_ip" "$ssh_user" "$remote_pki_dir"; then
+                echo ""
+                echo "Failed to download PKI files from Node 1."
+                echo "Please ensure the TLS setup has been completed on Node 1 first."
+                exit $EXIT_SETUP_FAILED
+            fi
+        else
+            echo "PKI files found locally."
         fi
         
         echo "Generating certificates for ${node_name} (${node_ip})..."

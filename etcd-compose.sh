@@ -453,7 +453,33 @@ run_etcd_tls_setup() {
     token=$(prompt_input "Set TOKEN")
     
     local data_dir
-    data_dir=$(prompt_input "Set DATA_DIR" "/var/lib/etcd")
+    local default_data_dir="/var/lib/etcd"
+    
+    # Check if existing database exists at default location
+    if [ -d "$default_data_dir" ] && [ "$(ls -A "$default_data_dir" 2>/dev/null)" ]; then
+        echo ""
+        echo "WARNING: Existing etcd database found at ${default_data_dir}"
+        echo ""
+        if prompt_yes_no "Delete existing database at ${default_data_dir}?"; then
+            echo "Deleting existing database..."
+            sudo rm -rf "${default_data_dir:?}"/*
+            echo "Database deleted."
+            data_dir=$(prompt_input "Set DATA_DIR" "$default_data_dir")
+        else
+            echo ""
+            echo "You must specify a different DATA_DIR location."
+            while true; do
+                data_dir=$(prompt_input "Set DATA_DIR (cannot be ${default_data_dir})")
+                if [ "$data_dir" = "$default_data_dir" ]; then
+                    echo "ERROR: Cannot use ${default_data_dir} - existing database not deleted."
+                else
+                    break
+                fi
+            done
+        fi
+    else
+        data_dir=$(prompt_input "Set DATA_DIR" "$default_data_dir")
+    fi
     
     local cert_dir
     cert_dir=$(prompt_input "Set CERT_DIR (certificate directory on host)" "/etc/etcd/pki")

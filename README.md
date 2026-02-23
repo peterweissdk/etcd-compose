@@ -1,6 +1,7 @@
 # 💾 etcd Cluster with TLS - Docker Compose Setup
-[![Static Badge](https://img.shields.io/badge/Cloudflare-CFSSL-white?style=flat&logo=cloudflare&logoColor=white&logoSize=auto&labelColor=black)](https://github.com/cloudflare/cfssl)
+[![Static Badge](https://img.shields.io/badge/etcd-Cluster-white?style=flat&logo=etcd&logoColor=white&logoSize=auto&labelColor=black)](https://etcd.io/)
 [![Static Badge](https://img.shields.io/badge/Docker-Compose-white?style=flat&logo=docker&logoColor=white&logoSize=auto&labelColor=black)](https://docker.com/)
+[![Static Badge](https://img.shields.io/badge/Library-white?style=flat&logo=openssl&logoColor=white&logoSize=auto&labelColor=black)](https://openssl.org/)
 [![Static Badge](https://img.shields.io/badge/Linux-white?style=flat&logo=linux&logoColor=white&logoSize=auto&labelColor=black)](https://www.linux.org/)
 [![Static Badge](https://img.shields.io/badge/GPL-V3-white?style=flat&logo=gnu&logoColor=white&logoSize=auto&labelColor=black)](https://www.gnu.org/licenses/gpl-3.0.en.html/)
 

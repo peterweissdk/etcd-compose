@@ -1,109 +1,26 @@
-# etcd Cluster with TLS - Docker Compose Setup
+# 💾 etcd Cluster with TLS - Docker Compose Setup
+[![Static Badge](https://img.shields.io/badge/Cloudflare-CFSSL-white?style=flat&logo=cloudflare&logoColor=white&logoSize=auto&labelColor=black)](https://github.com/cloudflare/cfssl)
+[![Static Badge](https://img.shields.io/badge/Docker-Compose-white?style=flat&logo=docker&logoColor=white&logoSize=auto&labelColor=black)](https://docker.com/)
+[![Static Badge](https://img.shields.io/badge/Linux-white?style=flat&logo=linux&logoColor=white&logoSize=auto&labelColor=black)](https://www.linux.org/)
+[![Static Badge](https://img.shields.io/badge/GPL-V3-white?style=flat&logo=gnu&logoColor=white&logoSize=auto&labelColor=black)](https://www.gnu.org/licenses/gpl-3.0.en.html/)
 
 This guide documents how to deploy a 2-node etcd cluster with mutual TLS authentication using Docker Compose.
 
-## Overview
+## 📋 Overview
 
 - **etcd version**: v3.6.8
 - **Nodes**: 2 (etcd-01 @ 10.0.0.10, etcd-02 @ 10.0.0.11)
-- **Network mode**: host
 - **TLS**: Mutual TLS for both client and peer communication
+- **OpenSSL**: Used for certificate generation
 
-## Directory Structure
-
-```
-.
-├── docker-compose.yml
-├── certs/
-│   ├── ca/
-│   │   ├── ca.key
-│   │   ├── ca.pem
-│   │   ├── ca.srl
-│   │   ├── db.index
-│   │   └── openssl-ca.cnf
-│   ├── server/
-│   │   ├── server.key
-│   │   ├── server.pem
-│   │   ├── server.csr
-│   │   └── openssl-server.cnf
-│   ├── peer/
-│   │   ├── peer.key
-│   │   ├── peer.pem
-│   │   ├── peer.csr
-│   │   └── openssl-peer.cnf
-│   └── client/
-│       ├── etcd-client.key
-│       ├── etcd-client.pem
-│       ├── etcd-client.csr
-│       └── openssl-client.cnf
-└── etcd-data/
-```
 
 ---
+## 🔧 Configuration
 
-## Part 1: TLS Certificate Generation
+### **Part 1: TLS Certificate Generation**
 
-> **Important**: Use the same CA for all nodes, and client certificates!
+**💡 Important**: Use the same CA for all nodes, and client certificates!
 
-### Certificate Types Explained
-
-**Server Certificate** (`server.pem`)
-- Used by etcd to authenticate itself to **clients** connecting on port 2379
-- When a client (like `etcdctl` or Kubernetes API server) connects, etcd presents this certificate to prove its identity
-- The client verifies the certificate against the trusted CA
-- Configured via `--cert-file` and `--key-file`
-
-**Peer Certificate** (`peer.pem`)
-- Used for **inter-node communication** between etcd cluster members on port 2380
-- Each etcd node uses this to authenticate itself to other etcd nodes during:
-  - Leader election
-  - Log replication (Raft consensus)
-  - Cluster membership changes
-- Configured via `--peer-cert-file` and `--peer-key-file`
-
-**Client Certificate** (`etcd-client.pem`)
-- Used by **applications and tools** to authenticate themselves to etcd
-- Required when `--client-cert-auth=true` is enabled (mutual TLS)
-- Common clients include:
-  - `etcdctl` CLI tool
-  - **Kubernetes components** (see below)
-  - Application services that read/write to etcd
-
-#### Kubernetes and etcd Client Certificates
-
-In a Kubernetes cluster, etcd is the backing store for all cluster data. The following components require client certificates to communicate with etcd:
-
-| Component | Purpose |
-|-----------|---------|
-| **kube-apiserver** | Primary client - stores all cluster state (pods, services, secrets, configmaps) |
-| **etcd backup tools** | Tools like `etcdctl` for snapshots and disaster recovery |
-| **etcd defrag jobs** | Maintenance operations to compact the database |
-
-**Important**: The client certificate must be signed by the **same CA** that signed the etcd server certificate. etcd only trusts certificates signed by its own CA (configured via `--trusted-ca-file`).
-
-To configure Kubernetes to authenticate to etcd, copy the generated etcd client certificate files to the Kubernetes control plane node(s) and configure kube-apiserver:
-
-1. Copy the etcd client certificates to the control plane:
-   ```bash
-   # Copy from your etcd certificate directory to Kubernetes PKI
-   cp certs/ca/ca.pem /etc/kubernetes/pki/etcd/ca.crt
-   cp certs/client/etcd-client.pem /etc/kubernetes/pki/apiserver-etcd-client.crt
-   cp certs/client/etcd-client.key /etc/kubernetes/pki/apiserver-etcd-client.key
-   
-   # Set proper permissions
-   chmod 644 /etc/kubernetes/pki/etcd/ca.crt
-   chmod 644 /etc/kubernetes/pki/apiserver-etcd-client.crt
-   chmod 600 /etc/kubernetes/pki/apiserver-etcd-client.key
-   ```
-
-2. Configure kube-apiserver with the etcd client certificate:
-   ```yaml
-   # kube-apiserver flags
-   --etcd-servers=https://10.0.0.10:2379,https://10.0.0.11:2379
-   --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
-   --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
-   --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
-   ```
 
 ### 1.1 Create Directory Structure
 
@@ -288,7 +205,7 @@ openssl x509 -req -in client/etcd-client.csr -CA ca/ca.pem -CAkey ca/ca.key -out
 
 ---
 
-## Part 2: Docker Compose Configuration
+### **Part 2: Docker Compose Configuration**
 
 ### Node 1 (etcd-01) - docker-compose.yml
 
@@ -379,11 +296,11 @@ services:
 
 ---
 
-## Part 3: Deployment
+### **Part 3: Deployment**
 
 ### 3.1 Copy Certificates to Each Node
 
-Ensure the `certs/` directory (with CA, server, peer, and client certificates) is present on both nodes.
+Ensure the `certs/` directory (with CA, server, and peer certificates) is present on both nodes.
 
 ### 3.2 Start the Cluster
 
@@ -425,8 +342,98 @@ etcdctl --endpoints=https://10.0.0.10:2379 \
 ```
 
 ---
+## 📝 Directory Structure
 
-## Troubleshooting
+```
+.
+├── docker-compose.yml
+├── certs/
+│   ├── ca/
+│   │   ├── ca.key
+│   │   ├── ca.pem
+│   │   ├── ca.srl
+│   │   ├── db.index
+│   │   └── openssl-ca.cnf
+│   ├── server/
+│   │   ├── server.key
+│   │   ├── server.pem
+│   │   ├── server.csr
+│   │   └── openssl-server.cnf
+│   ├── peer/
+│   │   ├── peer.key
+│   │   ├── peer.pem
+│   │   ├── peer.csr
+│   │   └── openssl-peer.cnf
+│   └── client/
+│       ├── etcd-client.key
+│       ├── etcd-client.pem
+│       ├── etcd-client.csr
+│       └── openssl-client.cnf
+└── etcd-data/
+```
+---
+## 📜 Certificate Types Explained
+
+**Server Certificate** (`server.pem`)
+- Used by etcd to authenticate itself to **clients** connecting on port 2379
+- When a client (like `etcdctl` or Kubernetes API server) connects, etcd presents this certificate to prove its identity
+- The client verifies the certificate against the trusted CA
+- Configured via `--cert-file` and `--key-file`
+
+**Peer Certificate** (`peer.pem`)
+- Used for **inter-node communication** between etcd cluster members on port 2380
+- Each etcd node uses this to authenticate itself to other etcd nodes during:
+  - Leader election
+  - Log replication (Raft consensus)
+  - Cluster membership changes
+- Configured via `--peer-cert-file` and `--peer-key-file`
+
+**Client Certificate** (`etcd-client.pem`)
+- Used by **applications and tools** to authenticate themselves to etcd
+- Required when `--client-cert-auth=true` is enabled (mutual TLS)
+- Common clients include:
+  - `etcdctl` CLI tool
+  - **Kubernetes components** (see below)
+  - Application services that read/write to etcd
+
+#### Kubernetes and etcd Client Certificates
+
+In a Kubernetes cluster, etcd is the backing store for all cluster data. The following components require client certificates to communicate with etcd:
+
+| Component | Purpose |
+|-----------|---------|
+| **kube-apiserver** | Primary client - stores all cluster state (pods, services, secrets, configmaps) |
+| **etcd backup tools** | Tools like `etcdctl` for snapshots and disaster recovery |
+| **etcd defrag jobs** | Maintenance operations to compact the database |
+
+**Important**: The client certificate must be signed by the **same CA** that signed the etcd server certificate. etcd only trusts certificates signed by its own CA (configured via `--trusted-ca-file`).
+
+To configure Kubernetes to authenticate to etcd, copy the generated etcd client certificate files to the Kubernetes control plane node(s) and configure kube-apiserver:
+
+1. Copy the etcd client certificates to the control plane:
+   ```bash
+   # Copy from your etcd certificate directory to Kubernetes PKI
+   cp certs/ca/ca.pem /etc/kubernetes/pki/etcd/ca.crt
+   cp certs/client/etcd-client.pem /etc/kubernetes/pki/apiserver-etcd-client.crt
+   cp certs/client/etcd-client.key /etc/kubernetes/pki/apiserver-etcd-client.key
+   
+   # Set proper permissions
+   chmod 644 /etc/kubernetes/pki/etcd/ca.crt
+   chmod 644 /etc/kubernetes/pki/apiserver-etcd-client.crt
+   chmod 600 /etc/kubernetes/pki/apiserver-etcd-client.key
+   ```
+
+2. Configure kube-apiserver with the etcd client certificate:
+   ```yaml
+   # kube-apiserver flags
+   --etcd-servers=https://10.0.0.10:2379,https://10.0.0.11:2379
+   --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
+   --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+   --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+   ```
+---
+
+## 🔍 Troubleshooting
 
 ### View Logs
 
@@ -439,12 +446,25 @@ docker logs etcd-v3.6.8
 1. **Certificate errors**: Ensure all SANs (Subject Alternative Names) include the correct IPs and hostnames
 2. **Connection refused**: Verify `network_mode: host` and correct IP bindings
 3. **Cluster not forming**: Check that `--initial-cluster-token` matches on all nodes
+4. **Client or Peer certificate authentication failed**: Ensure the client/peer certificate is signed by the same CA as the server certificate
 
 ---
 
-## Security Notes
+## ⚠️ Security Notes
 
 - Store private keys securely and restrict file permissions (`chmod 600`)
 - Change `--initial-cluster-token` to a unique, secure value
 - Rotate certificates before expiration (currently set to 3650 days / 10 years)
 - Consider using a proper PKI infrastructure for production environments
+---
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 🆘 Support
+
+If you encounter any issues or need support, please file an issue on the GitHub repository.
+
+## 📄 License
+
+This project is licensed under the GNU GENERAL PUBLIC LICENSE v3.0 - see the [LICENSE](LICENSE) file for details.

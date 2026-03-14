@@ -341,11 +341,24 @@ docker compose up -d
 
 ### 3.3 Verify Cluster Health
 
+**Option 1: Using local etcdctl**
+
 ```bash
 etcdctl --endpoints=https://10.0.0.10:2379,https://10.0.0.11:2379 \
   --cacert=/path/to/certs/ca/ca.pem \
   --cert=/path/to/certs/client/etcd-client.pem \
   --key=/path/to/certs/client/etcd-client.key \
+  endpoint health -w table
+```
+
+**Option 2: Using docker exec**
+
+```bash
+docker exec etcd-v3.6.8 etcdctl \
+  --endpoints=https://10.0.0.10:2379,https://10.0.0.11:2379 \
+  --cacert=/certs/ca/ca.pem \
+  --cert=/certs/client/etcd-client.pem \
+  --key=/certs/client/etcd-client.key \
   endpoint health -w table
 ```
 
@@ -362,11 +375,24 @@ Expected output:
 
 ### 3.4 Check Cluster Members
 
+**Option 1: Using local etcdctl**
+
 ```bash
 etcdctl --endpoints=https://10.0.0.10:2379 \
   --cacert=/path/to/certs/ca/ca.pem \
   --cert=/path/to/certs/client/etcd-client.pem \
   --key=/path/to/certs/client/etcd-client.key \
+  member list -w table
+```
+
+**Option 2: Using docker exec**
+
+```bash
+docker exec etcd-v3.6.8 etcdctl \
+  --endpoints=https://10.0.0.10:2379 \
+  --cacert=/certs/ca/ca.pem \
+  --cert=/certs/client/etcd-client.pem \
+  --key=/certs/client/etcd-client.key \
   member list -w table
 ```
 

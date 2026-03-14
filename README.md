@@ -222,6 +222,20 @@ services:
     volumes:
       - ./etcd-data:/etcd-data
       - ./certs:/certs
+    healthcheck:
+      test:
+        - CMD
+        - etcdctl
+        - --endpoints=https://10.0.0.10:2379
+        - --cacert=/certs/ca/ca.pem
+        - --cert=/certs/client/etcd-client.pem
+        - --key=/certs/client/etcd-client.key
+        - endpoint
+        - health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     command: |
       /usr/local/bin/etcd
       --name etcd-01
@@ -260,6 +274,20 @@ services:
     volumes:
       - ./etcd-data:/etcd-data
       - ./certs:/certs
+    healthcheck:
+      test:
+        - CMD
+        - etcdctl
+        - --endpoints=https://10.0.0.11:2379
+        - --cacert=/certs/ca/ca.pem
+        - --cert=/certs/client/etcd-client.pem
+        - --key=/certs/client/etcd-client.key
+        - endpoint
+        - health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     command: |
       /usr/local/bin/etcd
       --name etcd-02
